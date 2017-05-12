@@ -545,6 +545,7 @@ class Connection(Base):
         ('redis', 'Redis',),
         ('wasb', 'Azure Blob Storage'),
         ('databricks', 'Databricks',),
+        ('spark', 'Spark',),
     ]
 
     def __init__(
