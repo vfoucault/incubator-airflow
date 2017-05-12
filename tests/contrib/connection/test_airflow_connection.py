@@ -21,8 +21,7 @@ from airflow.utils import db
 
 class TestAirflowConnection(unittest.TestCase):
 
-    def __init__(self, *args, **kwargs):
-        super(TestAirflowConnection, self).__init__(*args, **kwargs)
+    def setUp(self):
         configuration.load_test_config()
         db.merge_conn(
             models.Connection(

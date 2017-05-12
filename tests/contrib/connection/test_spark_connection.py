@@ -22,8 +22,7 @@ from airflow.utils import db
 
 class TestSparkConnection(unittest.TestCase):
 
-    def __init__(self, *args, **kwargs):
-        super(TestSparkConnection, self).__init__(*args, **kwargs)
+    def setUp(self):
         configuration.load_test_config()
         db.merge_conn(
             models.Connection(
