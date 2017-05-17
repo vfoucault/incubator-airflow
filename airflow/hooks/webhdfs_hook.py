@@ -99,3 +99,31 @@ class WebHDFSHook(BaseHook):
                  n_threads=parallelism,
                  **kwargs)
         logging.debug("Uploaded file {} to {}".format(source, destination))
+
+    def move_file(self, source, destination):
+        """
+        Move (rename) a file on hdfs from source to destination (fullpath)
+
+        :param source: Local path to file or folder. If a folder, all the files
+          inside of it will be uploaded (note that this implies that folders empty
+          of files will not be created remotely).
+        :type source: str
+        :param destination: PTarget HDFS path. If it already exists and is a
+          directory, files will be uploaded inside.
+        :type destination: str
+       
+        """
+        c = self.get_conn()
+        c.rename(hdfs_src_path=source, hdfs_dst_path=destination,)
+        logging.debug("Moveing file {} to {}".format(source, destination))
+
+    def move_files(self, source_dir, dest_dir, with_dirs=False):
+        """
+        Move (rename) files on hdfs from source dir to destination dir(fullpath)
+        """
+        c = self.get_conn()
+        list_of_files = c.list(source_dir)
+        if not with_dirs:
+            list_of_files = [x for x in list_of_files if c.status("{}/{}".format(source_dir, x)['type'] == 'file')]
+        for afile in list_of_files:
+            self.move_file("{}/{}".format(source_dir, afile), dest_dir)
