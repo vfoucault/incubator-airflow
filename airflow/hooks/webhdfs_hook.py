@@ -100,30 +100,18 @@ class WebHDFSHook(BaseHook):
                  **kwargs)
         logging.debug("Uploaded file {} to {}".format(source, destination))
 
-    def move_file(self, source, destination):
-        """
-        Move (rename) a file on hdfs from source to destination (fullpath)
-
-        :param source: Local path to file or folder. If a folder, all the files
-          inside of it will be uploaded (note that this implies that folders empty
-          of files will not be created remotely).
-        :type source: str
-        :param destination: PTarget HDFS path. If it already exists and is a
-          directory, files will be uploaded inside.
-        :type destination: str
-       
-        """
+    def move(self, source_path, dest_path):
         c = self.get_conn()
-        c.rename(hdfs_src_path=source, hdfs_dst_path=destination,)
-        logging.debug("Moveing file {} to {}".format(source, destination))
+        c.rename(hdfs_src_path=source_path, hdfs_dst_path=dest_path)
+        logging.debug("Moved path {} to {}".format(source_path, dest_path))
 
-    def move_files(self, source_dir, dest_dir, with_dirs=False):
-        """
-        Move (rename) files on hdfs from source dir to destination dir(fullpath)
-        """
+    def delete(self, path, recursive=False):
         c = self.get_conn()
-        list_of_files = c.list(source_dir)
-        if not with_dirs:
-            list_of_files = [x for x in list_of_files if c.status("{}/{}".format(source_dir, x)['type'] == 'file')]
-        for afile in list_of_files:
-            self.move_file("{}/{}".format(source_dir, afile), dest_dir)
+        c.delete(path, recursive=recursive)
+        logging.debug("Deleted path {} with recursive {}".format(path, recursive))
+
+    def get(self, hdfs_path, local_path, overwrite=True, parallelism=1, **kwargs):
+        c = self.get_conn()
+        c.download(hdfs_path, local_path, overwrite=overwrite, n_threads=parallelism, **kwargs)
+        logging.debug("Download path {} to localpath {}".format(hdfs_path, hdfs_path))
+
