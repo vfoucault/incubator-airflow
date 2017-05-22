@@ -115,3 +115,10 @@ class WebHDFSHook(BaseHook):
         c.download(hdfs_path, local_path, overwrite=overwrite, n_threads=parallelism, **kwargs)
         logging.debug("Download path {} to localpath {}".format(hdfs_path, hdfs_path))
 
+    def makedirs(self, hdfs_path, permission=755):
+        c = self.get_conn()
+        c.makedirs(hdfs_path, permission)
+        logging.debug("making directory {}".format(hdfs_path))
+
+
+

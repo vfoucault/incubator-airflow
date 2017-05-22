@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import os
 import unittest
+import tempfile
+
 from airflow import configuration, models
 from hdfs import InsecureClient
 
@@ -40,19 +43,40 @@ class TestWebHdfsHook(unittest.TestCase):
 
         # Then
         self.assertEquals(InsecureClient, type(client))
-        self.assertTrue(hook.check_for_path())
+        self.assertTrue(hook.check_for_path('/'))
 
     def test_upload_file(self):
         # Given
         hook = WebHDFSHook('webhdfs_test')
-        client = hook.get_conn()
-
+        tmp_fname = tempfile.mkstemp(dir='/tmp')[1]
         # When
-        client.upload('/tmp','/etc/hosts')
+
+        with open(tmp_fname, 'wb') as tmpfile:
+            tmpfile.seek(1 * 1024 * 1024 - 1)
+            tmpfile.write(b'0')
+            tmpfile.seek(0)
+        hook.load_file(tmp_fname, '/tmp')
 
         # Then
-        nfile_status = hook.get_conn().list('/tmp', status=True)
-        self.assertTrue(hook.get_conn().list('/tmp', status=True), type(client))
+        nfile_status = hook.get_conn().status(tmp_fname)
+        self.assertEquals(nfile_status['blockSize'], 134217728)
+        os.unlink(tmp_fname)
+
+
+    def test_make_dir(self):
+        # Given
+        hook = WebHDFSHook('webhdfs_test')
+        tmp_dirnames = [next(tempfile._get_candidate_names()), next(tempfile._get_candidate_names())]
+
+        # When
+        hook.makedirs('/tmp/{}/{}'.format(tmp_dirnames[0], tmp_dirnames[1]))
+
+        # Then
+
+        tmp1_status = hook.get_conn().list('/tmp/')
+        tmp2_status = hook.get_conn().list('/tmp/{}'.format(tmp_dirnames[0]))
+        self.assertIn(tmp_dirnames[0], tmp1_status)
+        self.assertIn(tmp_dirnames[1], tmp2_status)
 
 if __name__ == '__main__':
     unittest.main()

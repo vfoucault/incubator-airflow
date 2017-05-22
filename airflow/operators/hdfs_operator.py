@@ -24,111 +24,30 @@ log = logging.getLogger(__name__)
 
 class HdfsOperator(BaseOperator):
     """
-    This hook is a wrapper around the spark-submit binary to kick off a spark-submit job.
-    It requires that the "spark-submit" binary is in the PATH or the spark-home is set
-    in the extra on the connection.
-    :param application: The application that submitted as a job, either jar or py file.
-    :type application: str
-    :param conf: Arbitrary Spark configuration properties
-    :type conf: dict
-    :param conn_id: The connection id as configured in Airflow administration. When an
-                    invalid connection_id is supplied, it will default to yarn.
-    :type conn_id: str
-    :param files: Upload additional files to the container running the job, separated by a
-                  comma. For example hive-site.xml.
-    :type files: str
-    :param py_files: Additional python files used by the job, can be .zip, .egg or .py.
-    :type py_files: str
-    :param jars: Submit additional jars to upload and place them in executor classpath.
-    :type jars: str
-    :param java_class: the main class of the Java application
-    :type java_class: str
-    :param total_executor_cores: (Standalone & Mesos only) Total cores for all executors (Default: all the available cores on the worker)
-    :type total_executor_cores: int
-    :param executor_cores: (Standalone & YARN only) Number of cores per executor (Default: 2)
-    :type executor_cores: int
-    :param executor_memory: Memory per executor (e.g. 1000M, 2G) (Default: 1G)
-    :type executor_memory: str
-    :param driver_memory: Memory allocated to the driver (e.g. 1000M, 2G) (Default: 1G)
-    :type driver_memory: str
-    :param keytab: Full path to the file that contains the keytab
-    :type keytab: str
-    :param principal: The name of the kerberos principal used for keytab
-    :type principal: str
-    :param name: Name of the job (default airflow-spark)
-    :type name: str
-    :param num_executors: Number of executors to launch
-    :type num_executors: int
-    :param application_args: Arguments for the application being submitted
-    :type application_args: list
-    :param verbose: Whether to pass the verbose flag to spark-submit process for debugging
-    :type verbose: bool
+    
     """
-    template_fields = ('_name', '_application_args',)
-    ui_color = WEB_COLORS['LIGHTORANGE']
+    template_fields = ('local_path', 'hdfs_path',)
+    ui_color = WEB_COLORS['LIGHTYELLOW']
 
     @apply_defaults
     def __init__(self,
-                 application='',
-                 conf=None,
-                 conn_id='spark_default',
-                 files=None,
-                 py_files=None,
-                 jars=None,
-                 java_class=None,
-                 total_executor_cores=None,
-                 executor_cores=None,
-                 executor_memory=None,
-                 driver_memory=None,
-                 keytab=None,
-                 principal=None,
-                 name='airflow-spark',
-                 num_executors=None,
-                 application_args=None,
-                 verbose=False,
-                 *args,
-                 **kwargs):
-        super(SparkSubmitOperator, self).__init__(*args, **kwargs)
-        self._application = application
-        self._conf = conf
-        self._files = files
-        self._py_files = py_files
-        self._jars = jars
-        self._java_class = java_class
-        self._total_executor_cores = total_executor_cores
-        self._executor_cores = executor_cores
-        self._executor_memory = executor_memory
-        self._driver_memory = driver_memory
-        self._keytab = keytab
-        self._principal = principal
-        self._name = name
-        self._num_executors = num_executors
-        self._application_args = application_args
-        self._verbose = verbose
-        self._hook = None
-        self._conn_id = conn_id
+                 local_path = None,
+                 hdfs_path = None,
+                 conn_id = 'webhdfs_default',
+                 proxy_user = None):
+        super(HdfsOperator, self).__init__()
+        self.local_path = local_path,
+        self.hdfs_path = hdfs_path,
+        self.conn_id = conn_id,
+        self.hook = None
+        self.proxy_user = None
 
     def execute(self, context):
         """
-        Call the SparkSubmitHook to run the provided spark job
         """
-        self._hook = SparkSubmitHook(
-            conf=self._conf,
-            conn_id=self._conn_id,
-            files=self._files,
-            py_files=self._py_files,
-            jars=self._jars,
-            java_class=self._java_class,
-            total_executor_cores=self._total_executor_cores,
-            executor_cores=self._executor_cores,
-            executor_memory=self._executor_memory,
-            driver_memory=self._driver_memory,
-            keytab=self._keytab,
-            principal=self._principal,
-            name=self._name,
-            num_executors=self._num_executors,
-            application_args=self._application_args,
-            verbose=self._verbose
+        self.hook = WebHDFSHook(
+            webhdfs_conn_id=self.conn_id,
+            proxy_user=self.proxy_user
         )
         self._hook.submit(self._application)
 
