@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 from airflow.hooks.base_hook import BaseHook
 from airflow import configuration
@@ -101,9 +102,43 @@ class WebHDFSHook(BaseHook):
         logging.debug("Uploaded file {} to {}".format(source, destination))
 
     def move(self, source_path, dest_path):
+        """
+        Move, rename a file/folder from source to destination
+        
+        :param source_path: HDFS path to file or folder. If a folder, all the files
+          and folders inside of it will be moved.
+        :type source_path: str
+        :param dest_path: target HDFS path. 
+        :type dest_path: str
+        
+        """
         c = self.get_conn()
-        c.rename(hdfs_src_path=source_path, hdfs_dst_path=dest_path)
-        logging.debug("Moved path {} to {}".format(source_path, dest_path))
+        contents = []
+        srcType = None
+        try:
+            if os.path.basename(source_path) == "*":
+                status = c.status(hdfs_path=os.path.dirname(source_path))
+                if status['type'] == "DIRECTORY":
+                    contents = c.list(source_path)
+                    srcType = "DIRECTORY"
+            else:
+                status = c.status(hdfs_path=source_path)
+                if status['type'] == "DIRECTORY":
+                    contents = c.list(source_path)
+                    srcType = "DIRECTORY"
+                elif status['type'] == "FILE":
+                    srcType = "FILE"
+            print("##### contents => %s | source_path = %s | target_path = %s" % (contents, source_path, dest_path))
+
+            if srcType == "DIRECTORY":
+                if len(contents) > 0:
+                    map(lambda x: c.rename(hdfs_src_path="{}/{}".format(source_path, x), hdfs_dst_path="{}/{}".format(dest_path, x)), contents)
+                else:
+                    raise AirflowWebHDFSHookException("Source {} is empty".format(source_path))
+            elif srcType == "FILE":
+                c.rename(hdfs_src_path=source_path, hdfs_dst_path=dest_path)
+        except HdfsError as error:
+            raise AirflowWebHDFSHookException("hdfs_path {} does not exists. Error : {}".format(source_path, error))
 
     def delete(self, path, recursive=False):
         c = self.get_conn()
