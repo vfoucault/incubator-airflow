@@ -113,29 +113,16 @@ class WebHDFSHook(BaseHook):
         
         """
         c = self.get_conn()
-        contents = []
-        srcType = None
         try:
+            # Try if it's a wildcard
             if os.path.basename(source_path) == "*":
                 status = c.status(hdfs_path=os.path.dirname(source_path))
                 if status['type'] == "DIRECTORY":
-                    contents = c.list(source_path)
-                    srcType = "DIRECTORY"
+                    basedir = os.path.dirname(source_path)
+                    contents = c.list(hdfs_path=basedir)
+                    map(lambda x: c.rename(hdfs_src_path="{}/{}".format(basedir, x), hdfs_dst_path="{}/{}".format(dest_path, x)), contents)
             else:
                 status = c.status(hdfs_path=source_path)
-                if status['type'] == "DIRECTORY":
-                    contents = c.list(source_path)
-                    srcType = "DIRECTORY"
-                elif status['type'] == "FILE":
-                    srcType = "FILE"
-            print("##### contents => %s | source_path = %s | target_path = %s" % (contents, source_path, dest_path))
-
-            if srcType == "DIRECTORY":
-                if len(contents) > 0:
-                    map(lambda x: c.rename(hdfs_src_path="{}/{}".format(source_path, x), hdfs_dst_path="{}/{}".format(dest_path, x)), contents)
-                else:
-                    raise AirflowWebHDFSHookException("Source {} is empty".format(source_path))
-            elif srcType == "FILE":
                 c.rename(hdfs_src_path=source_path, hdfs_dst_path=dest_path)
         except HdfsError as error:
             raise AirflowWebHDFSHookException("hdfs_path {} does not exists. Error : {}".format(source_path, error))

@@ -134,15 +134,34 @@ class TestWebHdfsHook(unittest.TestCase):
 
         source_files = [tempfile.mkstemp(dir='/tmp')[1] for x in range(1, 10)]
         hook.get_conn().makedirs("/tmp/{}".format(tmpdir1))
-        hook.get_conn().makedirs("/tmp/{}".format(tmpdir2))
         map(lambda x: hook.load_file(x, "/tmp/{}".format(tmpdir1)), source_files)
-
         # When
         hook.move("/tmp/{}".format(tmpdir1), "/tmp/{}".format(tmpdir2))
 
         # Then
         self.assertEquals(len(source_files), len(hook.get_conn().list("/tmp/{}".format(tmpdir2))))
+        with self.assertRaises(HdfsError):
+            hook.get_conn().list("/tmp/{}".format(tmpdir1))
+
+        map(lambda x: os.unlink(x), source_files)
+
+    def test_move_all_files_for_directory_with_wildcard(self):
+        # Given
+        hook = WebHDFSHook('webhdfs_test')
+        tmpdir1 = next(tempfile._get_candidate_names())
+        tmpdir2 = next(tempfile._get_candidate_names())
+
+        source_files = [tempfile.mkstemp(dir='/tmp')[1] for x in range(1, 10)]
+        hook.get_conn().makedirs("/tmp/{}".format(tmpdir1))
+        hook.get_conn().makedirs("/tmp/{}".format(tmpdir2))
+        map(lambda x: hook.load_file(x, "/tmp/{}".format(tmpdir1)), source_files)
+        # When
+        hook.move("/tmp/{}/*".format(tmpdir1), "/tmp/{}".format(tmpdir2))
+
+        # Then
+        self.assertEquals(len(source_files), len(hook.get_conn().list("/tmp/{}".format(tmpdir2))))
         self.assertListEqual([], hook.get_conn().list("/tmp/{}".format(tmpdir1)))
+
 
         map(lambda x: os.unlink(x), source_files)
 

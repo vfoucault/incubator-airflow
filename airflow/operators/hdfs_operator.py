@@ -56,6 +56,7 @@ class HdfsMoveOperator(HdfsOperator):
         )
         self.hook.move(source_path=self.source_path, dest_path=self.target_path)
 
+
 class HdfsCreateDirectoryOperator(HdfsOperator):
     """
     
