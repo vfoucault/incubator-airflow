@@ -15,6 +15,7 @@
 import os
 import unittest
 import tempfile
+import logging
 
 from airflow import configuration, models
 from hdfs import InsecureClient, HdfsError
@@ -28,11 +29,9 @@ class TestWebHdfsHook(unittest.TestCase):
 
     def setUp(self):
         configuration.load_test_config()
-        db.merge_conn(
-            models.Connection(
-                conn_id='webhdfs_test', conn_type='hdfs',
-                host='localhost', port="51351")
-        )
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+
 
     def test_get_connection(self):
         # Given
@@ -47,7 +46,7 @@ class TestWebHdfsHook(unittest.TestCase):
 
     def test_upload_file(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         tmp_fname = tempfile.mkstemp(dir='/tmp')[1]
         # When
 
@@ -63,10 +62,28 @@ class TestWebHdfsHook(unittest.TestCase):
         self.assertEquals(nfile_status['blockSize'], 134217728)
         os.unlink(tmp_fname)
 
+    def test_upload_file_with_proxy_user(self):
+        # Given
+        hook = WebHDFSHook('webhdfs_default', proxy_user='john.foo')
+        tmp_fname = tempfile.mkstemp(dir='/tmp')[1]
+        # When
+
+        with open(tmp_fname, 'wb') as tmpfile:
+            tmpfile.seek(1 * 1024 * 1024 - 1)
+            tmpfile.write(b'0')
+            tmpfile.seek(0)
+        hook.load_file(tmp_fname, '/tmp')
+        tmp_filename = os.path.basename(tmp_fname)
+
+        # Then
+        nfile_status = hook.get_conn().status("/tmp/{}".format(tmp_filename))
+        self.assertEquals(nfile_status['owner'], 'john.foo')
+        os.unlink(tmp_fname)
+
 
     def test_make_dir(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         tmp_dirnames = [next(tempfile._get_candidate_names()), next(tempfile._get_candidate_names())]
 
         # When
@@ -80,7 +97,7 @@ class TestWebHdfsHook(unittest.TestCase):
 
     def test_move_file(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         source_file = tempfile.mkstemp(dir='/tmp')[1]
 
         with open(source_file, 'wb') as tmpfile:
@@ -104,7 +121,7 @@ class TestWebHdfsHook(unittest.TestCase):
 
     def test_move_file_for_non_existing_file(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         tmp_filename = next(tempfile._get_candidate_names())
         tmp_destname = next(tempfile._get_candidate_names())
 
@@ -114,7 +131,7 @@ class TestWebHdfsHook(unittest.TestCase):
 
     def test_move_file_to_existing_file(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         source_file = tempfile.mkstemp(dir='/tmp')[1]
         dest_file = tempfile.mkstemp(dir='/tmp')[1]
         source_filename = os.path.basename(source_file)
@@ -126,9 +143,9 @@ class TestWebHdfsHook(unittest.TestCase):
         with self.assertRaises(AirflowWebHDFSHookException):
             hook.move("/tmp/{}".format(source_filename), "/tmp/{}".format(dest_filename))
 
-    def test_move_all_files_for_directory(self):
+    def test_move_directory(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         tmpdir1 = next(tempfile._get_candidate_names())
         tmpdir2 = next(tempfile._get_candidate_names())
 
@@ -147,7 +164,7 @@ class TestWebHdfsHook(unittest.TestCase):
 
     def test_move_all_files_for_directory_with_wildcard(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         tmpdir1 = next(tempfile._get_candidate_names())
         tmpdir2 = next(tempfile._get_candidate_names())
 
@@ -155,6 +172,7 @@ class TestWebHdfsHook(unittest.TestCase):
         hook.get_conn().makedirs("/tmp/{}".format(tmpdir1))
         hook.get_conn().makedirs("/tmp/{}".format(tmpdir2))
         map(lambda x: hook.load_file(x, "/tmp/{}".format(tmpdir1)), source_files)
+
         # When
         hook.move("/tmp/{}/*".format(tmpdir1), "/tmp/{}".format(tmpdir2))
 
@@ -162,12 +180,27 @@ class TestWebHdfsHook(unittest.TestCase):
         self.assertEquals(len(source_files), len(hook.get_conn().list("/tmp/{}".format(tmpdir2))))
         self.assertListEqual([], hook.get_conn().list("/tmp/{}".format(tmpdir1)))
 
+        map(lambda x: os.unlink(x), source_files)
+
+    def test_move_all_files_for_directory_with_wildcard_dest_not_exists(self):
+        # Given
+        hook = WebHDFSHook('webhdfs_default')
+        tmpdir1 = next(tempfile._get_candidate_names())
+        tmpdir2 = next(tempfile._get_candidate_names())
+
+        source_files = [tempfile.mkstemp(dir='/tmp')[1] for x in range(1, 10)]
+        hook.get_conn().makedirs("/tmp/{}".format(tmpdir1))
+        map(lambda x: hook.load_file(x, "/tmp/{}".format(tmpdir1)), source_files)
+
+        # When / Then
+        with self.assertRaises(AirflowWebHDFSHookException):
+            hook.move("/tmp/{}/*".format(tmpdir1), "/tmp/{}".format(tmpdir2))
 
         map(lambda x: os.unlink(x), source_files)
 
     def test_move_all_files_for_non_existing_directory(self):
         # Given
-        hook = WebHDFSHook('webhdfs_test')
+        hook = WebHDFSHook('webhdfs_default')
         tmpdir1 = next(tempfile._get_candidate_names())
         tmpdir2 = next(tempfile._get_candidate_names())
 

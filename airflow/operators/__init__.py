@@ -83,6 +83,7 @@ _operators = {
     'hive_to_mysql': ['HiveToMySqlTransfer'],
     'presto_to_mysql': ['PrestoToMySqlTransfer'],
     's3_file_transform_operator': ['S3FileTransformOperator'],
+    'hdfs_operator': ['HdfsOperator'],
     'http_operator': ['SimpleHttpOperator'],
     'hive_to_druid': ['HiveToDruidTransfer'],
     'jdbc_operator': ['JdbcOperator'],

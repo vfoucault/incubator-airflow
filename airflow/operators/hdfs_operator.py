@@ -18,134 +18,104 @@ from airflow.hooks.webhdfs_hook import WebHDFSHook
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 from airflow.settings import WEB_COLORS
+from airflow.exceptions import AirflowException
 
 log = logging.getLogger(__name__)
+
+
+
+class AirflowHdfsOperatorException(AirflowException):
+    pass
 
 
 class HdfsOperator(BaseOperator):
     """
     
     """
+
+    template_fields = ('source', 'destination', 'hdfs_path', )
+
     ui_color = WEB_COLORS['LIGHTYELLOW']
 
     @apply_defaults
-    def __init__(self, conn_id = 'webhdfs_default', proxy_user = None, *args, **kwargs):
+    def __init__(self,
+                 optype=None,
+                 source=None,
+                 destination=None,
+                 hdfs_path=None,
+                 recursive=False,
+                 overwrite=False,
+                 parallelism=1,
+                 permission=755,
+                 conn_id='webhdfs_default',
+                 proxy_user=None,
+                 *args,
+                 **kwargs):
         super(HdfsOperator, self).__init__(*args, **kwargs)
-        self.conn_id = conn_id,
-        self.hook = None
-        self.proxy_user = None
-
-class HdfsMoveOperator(HdfsOperator):
-    """
-    
-    """
-    template_fields = ('source_path', 'target_path')
-
-    @apply_defaults
-    def __init__(self, source_path, target_path, *args, **kwargs):
-        super(HdfsMoveOperator, self).__init__(*args, **kwargs)
-        self.source_path = source_path
-        self.target_path = target_path
-
-    def execute(self, context):
-        """
-        """
-        self.hook = WebHDFSHook(
-            webhdfs_conn_id=self.conn_id,
-            proxy_user=self.proxy_user
-        )
-        self.hook.move(source_path=self.source_path, dest_path=self.target_path)
-
-
-class HdfsCreateDirectoryOperator(HdfsOperator):
-    """
-    
-    """
-    template_fields = ('hdfs_path',)
-
-    @apply_defaults
-    def __init__(self, hdfs_path, permission=755, *args, **kwargs):
-        super(HdfsCreateDirectoryOperator, self).__init__(*args, **kwargs)
-        self.hdfs_path = hdfs_path
-        self.permission = permission
-
-    def execute(self, context):
-        """
-        """
-        self.hook = WebHDFSHook(
-            webhdfs_conn_id=self.conn_id,
-            proxy_user=self.proxy_user
-        )
-        self.hook.makedirs(hdfs_path=self.hdfs_path, permission=self.permission)
-
-
-class HdfsDeleteOperator(HdfsOperator):
-    """
-    
-    """
-    template_fields = ('hdfs_path',)
-
-    @apply_defaults
-    def __init__(self, hdfs_path, recursive=False, *args, **kwargs):
-        super(HdfsCreateDirectoryOperator, self).__init__(*args, **kwargs)
+        self.optype = optype
+        self.source = source
+        self.destination = destination
         self.hdfs_path = hdfs_path
         self.recursive = recursive
-
-    def execute(self, context):
-        """
-        """
-        self.hook = WebHDFSHook(
-            webhdfs_conn_id=self.conn_id,
-            proxy_user=self.proxy_user
-        )
-        self.hook.delete(hdfs_path=self.hdfs_path, recursive=self.recursive)
-
-
-class HdfsGetFileOperator(HdfsOperator):
-    """
-    
-    """
-    template_fields = ('hdfs_path', 'local_path')
-
-    @apply_defaults
-    def __init__(self, hdfs_path, local_path, overwrite=True, *args, **kwargs):
-        super(HdfsGetFileOperator, self).__init__(*args, **kwargs)
-        self.hdfs_path = hdfs_path
-        self.local_path = local_path
-        self.overwrite = overwrite
-
-    def execute(self, context):
-        """
-        """
-        self.hook = WebHDFSHook(
-            webhdfs_conn_id=self.conn_id,
-            proxy_user=self.proxy_user
-        )
-        self.hook.get(hdfs_path=self.hdfs_path, local_path=self.local_path, overwrite=self.overwrite)
-
-
-class HdfsPutFileOperator(HdfsOperator):
-    """
-    
-    """
-    template_fields = ('hdfs_path', 'local_path')
-
-    @apply_defaults
-    def __init__(self, hdfs_path, local_path, overwrite=False, parallelism=1, *args, **kwargs):
-        super(HdfsPutFileOperator, self).__init__(*args, **kwargs)
-        self.hdfs_path = hdfs_path
-        self.local_path = local_path
         self.overwrite = overwrite
         self.parallelism = parallelism
+        self.permission = permission
+        self.conn_id = conn_id
+        self.hook = None
+        self.proxy_user = proxy_user
 
-    def execute(self, context):
+    def pre_execute(self, context):
         """
+        
+        :param context: 
+        :return: 
         """
         self.hook = WebHDFSHook(
             webhdfs_conn_id=self.conn_id,
             proxy_user=self.proxy_user
         )
-        self.hook.load_file(source=local_path,
-                            destination=self.hdfs_path,
-                            overwrite=self.overwrite,
-                            parallelism=self.parallelism)
+
+    def test_variables(self, variable_list):
+        """
+        Test wether some variables are set to None
+        :param variable_list: Variables names to test
+        :type variable_list: List of Strings
+        :return: Boolean : True if none of the variables are set to None
+        """
+        result = [{'name': x, 'value': getattr(self, x)} for x in variable_list if not getattr(self, x) ]
+        if len(result) > 0:
+            logging.error('Some variables aren\'t defined')
+            map(lambda x: logging.error('{} attribute is empty'.format(x['name'])))
+            raise AirflowHdfsOperatorException("Some required attribute are empty !")
+        else:
+            return True
+
+    def execute(self, context):
+        """
+        
+        :param context: 
+        :return: 
+        """
+        self.test_variables(['optype'])
+        if self.optype == 'move':
+            if self.test_variables(['source', 'destination']):
+                self.hook.move(source=self.source, destination=self.destination)
+        elif self.optype == 'makedirs':
+            if self.test_variables(['hdfs_path']):
+                self.hook.makedirs(hdfs_path=self.hdfs_path, permission=self.permission)
+        elif self.optype == 'delete':
+            if self.test_variables(['hdfs_path']):
+                self.hook.delete(hdfs_path=self.hdfs_path, recursive=self.recursive)
+        elif self.optype == 'download':
+            if self.test_variables(['source', 'destination']):
+                self.hook.get(source=self.source, destination=self.destination, overwrite=self.overwrite)
+        elif self.optype == 'upload':
+            if self.test_variables(['source', 'destination']):
+                self.hook.load_file(source=self.source,
+                                    destination=self.destination,
+                                    overwrite=self.overwrite,
+                                    parallelism=self.parallelism)
+
+
+
+

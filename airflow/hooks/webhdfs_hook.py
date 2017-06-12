@@ -101,43 +101,77 @@ class WebHDFSHook(BaseHook):
                  **kwargs)
         logging.debug("Uploaded file {} to {}".format(source, destination))
 
-    def move(self, source_path, dest_path):
+    def move(self, source, destination):
         """
         Move, rename a file/folder from source to destination
         
-        :param source_path: HDFS path to file or folder. If a folder, all the files
-          and folders inside of it will be moved.
-        :type source_path: str
-        :param dest_path: target HDFS path. 
-        :type dest_path: str
-        
+        :param source: HDFS path to file or folder. If ended with a wildcard (*), 
+            the all the files and folders within this directory are moved to the
+            dest_path
+        :type source: str
+        :param destination: target HDFS path. if source ends with a wildcard (*y) then 
+            it must be a directory
+        :type destination: str
         """
         c = self.get_conn()
         try:
-            # Try if it's a wildcard
-            if os.path.basename(source_path) == "*":
-                status = c.status(hdfs_path=os.path.dirname(source_path))
+            if os.path.basename(source) == "*":
+                status = c.status(hdfs_path=os.path.dirname(source))
                 if status['type'] == "DIRECTORY":
-                    basedir = os.path.dirname(source_path)
+                    basedir = os.path.dirname(source)
                     contents = c.list(hdfs_path=basedir)
-                    map(lambda x: c.rename(hdfs_src_path="{}/{}".format(basedir, x), hdfs_dst_path="{}/{}".format(dest_path, x)), contents)
+                    logging.debug("Moving {} file(s) from {} to {}".format(len(contents), basedir, destination))
+                    map(lambda x: c.rename(hdfs_src_path="{}/{}".format(basedir, x), hdfs_dst_path="{}/{}".format(destination, x)), contents)
+                else:
+                    raise AirflowWebHDFSHookException("Destination is not a directory")
             else:
-                status = c.status(hdfs_path=source_path)
-                c.rename(hdfs_src_path=source_path, hdfs_dst_path=dest_path)
+                c.status(hdfs_path=source)
+                logging.debug("Moving {} to {}".format(source, destination))
+                c.rename(hdfs_src_path=source, hdfs_dst_path=destination)
         except HdfsError as error:
-            raise AirflowWebHDFSHookException("hdfs_path {} does not exists. Error : {}".format(source_path, error))
+            raise AirflowWebHDFSHookException("hdfs_path {} does not exists. Error : {}".format(source, error))
 
-    def delete(self, path, recursive=False):
+    def delete(self, hdfs_path, recursive=False):
+        """
+        Delete a hdfs path
+        
+        :param hdfs_path: HDFS path to file or folder to remove
+        :type source_path: str
+        :param recursive: Do a recursive removal, mandatroy for directories
+        :type dest_path: Bool
+        """
         c = self.get_conn()
-        c.delete(path, recursive=recursive)
-        logging.debug("Deleted path {} with recursive {}".format(path, recursive))
+        c.delete(hdfs_path, recursive=recursive)
+        logging.debug("Deleted path {} with recursive {}".format(hdfs_path, recursive))
 
-    def get(self, hdfs_path, local_path, overwrite=True, parallelism=1, **kwargs):
+    def get(self, source, destination, overwrite=True, parallelism=1):
+        """
+        Get a hdfs file/folder to the local filesystem
+        
+        :param source: HDFS path to file or folder. 
+        :type source_path: str
+        :param destination: the local target path.
+        :type dest_path: str
+        :param overwrite: Wheter to overwrite local copy of file/directory if exists
+        :type: Bool
+        :param parallelism: Number of threads to use for parallelization. A value of
+          `0` (or negative) uses as many threads as there are files.
+        :type parallelism: int
+        """
         c = self.get_conn()
-        c.download(hdfs_path, local_path, overwrite=overwrite, n_threads=parallelism, **kwargs)
-        logging.debug("Download path {} to localpath {}".format(hdfs_path, hdfs_path))
+        c.download(source, destination, overwrite=overwrite, n_threads=parallelism, **kwargs)
+        logging.debug("Download path {} to localpath {}".format(source, source))
 
     def makedirs(self, hdfs_path, permission=755):
+        """
+        Create HDFS folders
+        
+        :param hdfs_path: HDFS path to folder. Recursive is implicit
+        :type source_path: str
+        :param permission: octal rights for new folder 
+        :type dest_path: str
+        
+        """
         c = self.get_conn()
         c.makedirs(hdfs_path, permission)
         logging.debug("making directory {}".format(hdfs_path))
